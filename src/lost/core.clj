@@ -110,11 +110,9 @@
 
 (def extract-filename (extract-field :filename))
 (def extract-camera (extract-field :camera))
-(def keep-by-canon-only #(filter-values
-                          (fn [item]
-                            (if (= "Canon EOS 450D" (:camera item))
-                              true
-                              false)) %))
+(defn keep-by-canon-only
+  [coll]
+  (filter-values #(= "Canon EOS 450D" (:camera %)) coll))
 
 (defn create-pictures-json
   [filename]
@@ -123,15 +121,70 @@
                    parse-file
                    partition-by-camera-present
                    (update-in [:withCamera] partition-by-date-present)
-                   (update-in [:withCamera :withDate] group-by-year)
-                   (update-in [:withCamera :withDate] #(map-values group-by-month %))
-                   (update-in [:withCamera :withDate] #(map-values keep-by-canon-only %))
+                   (update-in [:withCamera :withDate] (comp
+                                                       #(map-values keep-by-canon-only %)
+                                                       
+                                                       #(map-values group-by-month %)
+                                                       group-by-year))
                    extract-filename
                    )]
-    (json/pprint result)
-    ))
+    (json/pprint result)))
+
+(def call1 #(%1 %2))
+
+
+(defn flatten-tree
+  ([name tree]
+   (condp call1 tree
+     map? (flatten
+           (map
+            (fn [[k v]]
+              (flatten-tree
+               (str name "/" k)
+               v))
+            tree))
+     coll? (flatten (map (partial flatten-tree name) tree))
+     (str name "/" tree)))
+  ([tree] (flatten-tree "" tree))
+)
+
+
+(defn source-dest
+  [file-path]
+  [(re-find #"/[^/]+$" file-path) file-path])
+
+(def map-> #(map %2 %1))
+
+(def new-lines (partial clojure.string/join "\n"))
+
+(defn mv
+  [[[src dest] & tail]]
+  (if (empty? tail)
+    true
+    (recur tail))
+)
+
+(defn move-files
+ [filename ext source-dir dest-dir]
+ (-> filename
+     slurp
+     json/read-str
+     flatten-tree
+     (map-> source-dest)
+     (map-> (partial map #(str % "." ext)))
+     (map-> (fn [[src dest]]
+              [(str source-dir src) (str dest-dir dest)]))
+     (map-> (fn [[src dest]] (str src " " dest)))
+     (new-lines)))
+
+
+(defn -main1
+  [filename]
+  (create-pictures-json filename))
 
 (defn -main
-  [filename]
-  (create-pictures-json filename)
+  [& args]
+  (println (apply move-files args))
 )
+
+

@@ -174,7 +174,7 @@
      (map-> (partial map #(str % "." ext)))
      (map-> (fn [[src dest]]
               [(str source-dir src) (str dest-dir dest)]))
-     (map-> (fn [[src dest]] (str src " " dest)))
+     (map-> (fn [[src dest]] (str "cp -av " src " " dest)))
      (new-lines)))
 
 
